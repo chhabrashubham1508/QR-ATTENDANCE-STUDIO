@@ -1,0 +1,169 @@
+
+{% extends "base.html" %}
+{% block title %}Live Attendance QR | {{ s.title }}{% endblock %}
+{% block content %}
+<div style="max-width: 580px; margin: 24px auto;">
+  <div class="card" style="text-align: center;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+      <h2 style="margin: 0; font-size: 1.35rem;">{{ s.title }}</h2>
+      {% if s.active %}
+        <span id="session-badge" class="badge badge-success">● Active (10s Dynamic QR)</span>
+      {% else %}
+        <span id="session-badge" class="badge badge-danger">Session Closed</span>
+      {% endif %}
+    </div>
+
+    <p style="margin: 0 0 16px; font-size: 0.95rem;">
+      Students should scan this dynamic QR code from their student dashboard.
+    </p>
+
+    <!-- QR Code Display Box -->
+    <div class="qr-card" style="margin: 0 auto 18px; max-width: 340px;">
+      {% if s.active and qr_data %}
+        <img
+          id="attendance-qr"
+          src="data:image/png;base64,{{ qr_data }}"
+          alt="Live Attendance QR Code"
+          style="width: 260px; height: 260px; display: block; border-radius: 8px;">
+      {% else %}
+        <div class="empty-state" style="padding: 48px 24px;">
+          <p style="margin: 0; font-weight: 700; color: var(--danger);">This attendance session is closed.</p>
+          <p style="margin: 6px 0 0; font-size: 0.85rem;">No further attendance can be recorded.</p>
+        </div>
+      {% endif %}
+
+      {% if s.active %}
+        <!-- Live Countdown & Stats Bar -->
+        <div id="countdown-container"
+             data-timeout="{{ timeout|default(10) }}"
+             data-remaining="{{ remaining if (remaining is defined and remaining > 0) else (timeout|default(10)) }}"
+             data-feed-url="{{ url_for('session_qr_feed', session_id=s.id) }}"
+             style="width: 100%; margin-top: 10px;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.88rem; font-weight: 700; margin-bottom: 6px;">
+            <span>⏱️ Refreshes in: <span id="countdown-text" style="color: var(--brand);">{{ remaining if (remaining is defined and remaining > 0) else (timeout|default(10)) }}</span>s</span>
+            <span>👥 Marked: <span id="attendee-count" style="color: var(--success);">{{ attendance_count }}</span></span>
+          </div>
+          <!-- Visual progress bar -->
+          <div style="width: 100%; height: 6px; background: #e2e8f0; border-radius: 999px; overflow: hidden;">
+            <div id="countdown-bar" style="height: 100%; width: 100%; background: var(--brand); transition: width 1s linear;"></div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 14px;">
+      {% if s.active %}
+        <form method="post" action="{{ url_for('close_session', session_id=s.id) }}" style="display: inline-block; margin: 0;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to close this attendance session?');">
+            Close Session
+          </button>
+        </form>
+      {% endif %}
+      <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+  </div>
+</div>
+
+{% if s.active %}
+<script>
+  (function() {
+    const countdownContainer = document.getElementById("countdown-container");
+    if (!countdownContainer) return;
+
+    const TIMEOUT = parseInt(countdownContainer.dataset.timeout, 10) || 10;
+    let remaining = parseInt(countdownContainer.dataset.remaining, 10) || TIMEOUT;
+    const feedUrl = countdownContainer.dataset.feedUrl;
+
+    const countdownText = document.getElementById("countdown-text");
+    const countdownBar = document.getElementById("countdown-bar");
+    const qrImg = document.getElementById("attendance-qr");
+    const attendeeCount = document.getElementById("attendee-count");
+    const badge = document.getElementById("session-badge");
+    let isFetching = false;
+    let timerInterval = null;
+
+    function updateProgressUI() {
+      if (countdownText) {
+        countdownText.textContent = remaining;
+      }
+      if (countdownBar) {
+        const percent = Math.max(0, Math.min(100, (remaining / TIMEOUT) * 100));
+        countdownBar.style.width = percent + "%";
+        if (remaining <= 3) {
+          countdownBar.style.background = "var(--danger)";
+        } else {
+          countdownBar.style.background = "var(--brand)";
+        }
+      }
+    }
+
+    async function fetchNextQR() {
+      if (isFetching || !feedUrl) return;
+      isFetching = true;
+
+      try {
+        const response = await fetch(feedUrl, {
+          headers: {
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error("Server returned HTTP " + response.status);
+        }
+
+        const data = await response.json();
+
+        if (data.ok && data.active) {
+          if (qrImg && data.qr_data) {
+            qrImg.src = "data:image/png;base64," + data.qr_data;
+          }
+          if (attendeeCount && data.attendance_count !== undefined) {
+            attendeeCount.textContent = data.attendance_count;
+          }
+          remaining = (data.remaining && data.remaining > 0) ? data.remaining : TIMEOUT;
+          if (countdownBar) {
+            countdownBar.style.transition = "none";
+            countdownBar.style.width = "100%";
+            setTimeout(() => {
+              if (countdownBar) countdownBar.style.transition = "width 1s linear";
+            }, 50);
+          }
+          updateProgressUI();
+        } else if (!data.active) {
+          if (badge) {
+            badge.className = "badge badge-danger";
+            badge.textContent = "Session Closed";
+          }
+          if (countdownContainer) {
+            countdownContainer.style.display = "none";
+          }
+          if (timerInterval) {
+            clearInterval(timerInterval);
+          }
+        }
+      } catch (err) {
+        console.warn("Dynamic QR refresh warning:", err);
+      } finally {
+        isFetching = false;
+      }
+    }
+
+    updateProgressUI();
+
+    timerInterval = setInterval(function() {
+      remaining--;
+      if (remaining <= 0) {
+        remaining = TIMEOUT;
+        updateProgressUI();
+        fetchNextQR();
+      } else {
+        updateProgressUI();
+      }
+    }, 1000);
+  })();
+</script>
+{% endif %}
+{% endblock %}

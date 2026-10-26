@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Manage Faculty & Teachers | QR Attendance Studio{% endblock %}
+{% block content %}
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <h1 style="margin: 0; font-size: 1.65rem;">Faculty & Teachers</h1>
+    <p style="margin: 4px 0 0; font-size: 0.95rem; color: var(--text-muted);">
+      Manage faculty members, lecture coordinators, and staff credentials.
+    </p>
+  </div>
+  <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">← Back to Dashboard</a>
+</div>
+
+<!-- 2-Column: Add Teacher Form + Registered Teachers List -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; align-items: start;">
+  
+  <!-- Add Teacher Panel -->
+  <div class="panel">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+      <span style="font-size: 1.25rem;">👨‍🏫</span>
+      <h3 style="margin: 0; font-size: 1.15rem;">Add New Faculty / Teacher</h3>
+    </div>
+    <p style="font-size: 0.88rem; margin: 0 0 16px; color: var(--text-muted);">
+      Teachers can log in, create lecture sessions, launch live dynamic QR screens, and export reports.
+    </p>
+
+    <form method="post" action="{{ url_for('manage_teachers') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label>Full Name</label>
+        <input name="name" placeholder="e.g. Prof. Alan Turing" required maxlength="120">
+      </div>
+      <div>
+        <label>Department / Discipline</label>
+        <input name="department" placeholder="e.g. Computer Science" value="Computer Science" required maxlength="100">
+      </div>
+      <div>
+        <label>Email Address</label>
+        <input name="email" type="email" placeholder="e.g. turing@college.edu" maxlength="120">
+      </div>
+      <div>
+        <label>Login Username</label>
+        <input name="username" placeholder="e.g. prof_turing" required maxlength="80">
+      </div>
+      <div>
+        <label>Initial Password (Min 8 characters)</label>
+        <input name="password" type="password" placeholder="••••••••" required minlength="8">
+      </div>
+      <button type="submit" style="margin-top: 8px;">Create Faculty Account</button>
+    </form>
+  </div>
+
+  <!-- Registered Faculty Table -->
+  <div class="panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+      <h3 style="margin: 0; font-size: 1.15rem;">Active Faculty Members ({{ teachers|length }})</h3>
+      <div style="width: min(240px, 100%);">
+        <input type="text" id="teacher-search" class="search-input" placeholder="Search faculty..." onkeyup="filterTeachers()">
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="teachers-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Department</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in teachers %}
+          <tr class="teacher-row" data-query="{{ (t.name ~ ' ' ~ t.department ~ ' ' ~ t.username ~ ' ' ~ (t.email or ''))|lower }}">
+            <td>
+              <strong style="color: var(--text);">{{ t.name }}</strong>
+              {% if t.email %}
+                <div style="font-size: 0.78rem; color: var(--text-muted);">{{ t.email }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge" style="background: #eef2ff; color: #4338ca; font-weight: 600;">
+                {{ t.department }}
+              </span>
+            </td>
+            <td style="color: var(--text-muted); font-size: 0.88rem;">{{ t.username }}</td>
+            <td>
+              <span class="badge {{ 'badge-success' if t.role == 'admin' else '' }}" style="text-transform: capitalize;">
+                {{ t.role }}
+              </span>
+            </td>
+            <td style="text-align: right;">
+              <div class="btn-group" style="justify-content: flex-end;">
+                <!-- Edit Teacher -->
+                <a href="{{ url_for('edit_teacher', teacher_id=t.id) }}" class="btn btn-secondary btn-sm" title="Edit teacher">
+                  ✏️ Edit
+                </a>
+
+                <!-- Delete Teacher (prevent self-deletion) -->
+                {% if t.user_id|string != current_user.id %}
+                <form method="post" action="{{ url_for('delete_teacher', teacher_id=t.id) }}" style="display:inline; margin:0;"
+                      onsubmit="return confirm('Are you sure you want to delete teacher \'{{ t.name|replace('\'', '\\\'') }}\'? Their user login will also be removed.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-danger btn-sm" title="Delete teacher">
+                    🗑️
+                  </button>
+                </form>
+                {% else %}
+                <span style="font-size: 0.78rem; color: var(--text-muted); padding: 4px 6px;">(You)</span>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="empty-state" style="padding: 24px;">No faculty accounts registered yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  function filterTeachers() {
+    const query = document.getElementById("teacher-search").value.toLowerCase().trim();
+    const rows = document.querySelectorAll("#teachers-table tbody tr.teacher-row");
+    rows.forEach(row => {
+      const text = row.getAttribute("data-query") || "";
+      row.style.display = text.includes(query) ? "" : "none";
+    });
+  }
+</script>
+{% endblock %}

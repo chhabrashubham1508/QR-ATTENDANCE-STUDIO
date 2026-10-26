@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Edit Faculty | {{ teacher.name }}{% endblock %}
+{% block content %}
+
+<div style="max-width: 540px; margin: 30px auto;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div>
+      <h2 style="margin: 0; font-size: 1.45rem;">✏️ Edit Faculty Member</h2>
+      <p style="margin: 4px 0 0; font-size: 0.9rem; color: var(--text-muted);">
+        Update faculty information or reset password for {{ teacher.name }}.
+      </p>
+    </div>
+    <a href="{{ url_for('manage_teachers') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+
+  <div class="panel">
+    <form method="post" action="{{ url_for('edit_teacher', teacher_id=teacher.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label>Full Name</label>
+        <input name="name" value="{{ teacher.name }}" required maxlength="120">
+      </div>
+
+      <div>
+        <label>Department / Discipline</label>
+        <input name="department" value="{{ teacher.department }}" required maxlength="100">
+      </div>
+
+      <div>
+        <label>Email Address</label>
+        <input name="email" type="email" value="{{ teacher.email or '' }}" maxlength="120">
+      </div>
+
+      <div>
+        <label>Login Username</label>
+        <input name="username" value="{{ teacher.username }}" required maxlength="80">
+      </div>
+
+      <div>
+        <label>New Password (Optional)</label>
+        <input name="password" type="password" placeholder="Leave blank to keep current password" minlength="8">
+        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-top: 4px;">
+          Only enter a value if you wish to reset their password (min 8 characters).
+        </span>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 14px;">
+        <button type="submit" style="flex: 1;">Save Changes</button>
+        <a href="{{ url_for('manage_teachers') }}" class="btn btn-secondary" style="flex: 1;">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,271 @@
+
+{% extends "base.html" %}
+{% block title %}Student Dashboard{% endblock %}
+{% block content %}
+<h2>Student Dashboard</h2>
+
+<div class="stats-grid" style="margin-bottom: 20px;">
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Student Name</span>
+      <span class="stat-value" style="font-size: 1.45rem;">{{ student.name }}</span>
+      <span class="stat-subtext">Roll No: <strong>{{ student.roll_no }}</strong></span>
+    </div>
+    <div class="stat-icon primary">🎓</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Verified Scans</span>
+      <span class="stat-value">{{ records|length }}</span>
+      <span class="stat-subtext">Classes attended</span>
+    </div>
+    <div class="stat-icon success">✅</div>
+  </div>
+</div>
+
+<!-- Classroom Announcements & Notices -->
+<div class="chat-card" style="margin-bottom: 22px;">
+  <div class="chat-header">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 1.2rem;">📢</span>
+      <h3 style="margin: 0; font-size: 1.05rem;">Classroom Announcements & Notices</h3>
+    </div>
+    <span style="font-size: 0.8rem; color: var(--text-muted);">{{ messages|length if messages else 0 }} posts</span>
+  </div>
+
+  <div class="chat-messages" style="max-height: 220px;">
+    {% for msg in messages %}
+    <div class="chat-item">
+      <div class="chat-avatar {{ msg.role }}">{{ msg.author_name[:1]|upper }}</div>
+      <div class="chat-content">
+        <div class="chat-meta">
+          <span class="chat-author">{{ msg.author_name }}</span>
+          <span class="chat-role-badge {{ msg.role }}">{{ msg.role|capitalize }}</span>
+          <span class="chat-time">{{ msg.created_at|timeago }}</span>
+        </div>
+        <p class="chat-text">{{ msg.message }}</p>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding: 16px;">
+      <p style="margin: 0;">No notices posted yet.</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="panel" style="margin-bottom: 22px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+    <div>
+      <h3 style="margin: 0;">Scan Attendance QR</h3>
+      <p style="margin: 4px 0 0; color: var(--text-muted); font-size: 0.9rem;">
+        Allow camera access and scan the live dynamic QR shown on your instructor's screen.
+      </p>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button type="button" id="flip-cam-btn" class="btn btn-secondary" style="display: none; padding: 6px 12px; font-size: 0.85rem;">
+        🔄 Switch Camera
+      </button>
+      <label for="qr-file-input" class="btn btn-secondary" style="cursor: pointer; padding: 6px 12px; font-size: 0.85rem; margin: 0; display: inline-flex; align-items: center; gap: 4px;">
+        📸 Upload / Snap Photo
+      </label>
+      <input type="file" id="qr-file-input" accept="image/*" capture="environment" style="display: none;">
+    </div>
+  </div>
+
+  <div id="https-warning" style="display: none; padding: 12px 16px; margin-bottom: 14px; background: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-radius: 8px; font-size: 0.88rem; line-height: 1.45;">
+    <strong>⚠️ Insecure Context Detected (HTTP):</strong>
+    Mobile browsers (Chrome, Safari) strictly block camera streaming unless served over <strong>HTTPS</strong> or <strong>localhost</strong>.
+    <br><span style="display:block; margin-top: 4px;">💡 <strong>Quick Fix:</strong> Use the <strong>"📸 Upload / Snap Photo"</strong> button above, or run Flask with HTTPS (or ngrok/tunnel).</span>
+  </div>
+
+  <div id="reader" style="position: relative;"></div>
+
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+    <p id="scan-status" role="status" aria-live="polite" style="margin: 0; font-weight: 500; font-size: 0.92rem;">
+      Scanner loading...
+    </p>
+    <button type="button" id="retry-cam-btn" class="btn btn-secondary" style="display: none; padding: 4px 10px; font-size: 0.8rem;">
+      Retry Camera
+    </button>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>Recent Attendance</h3>
+  <table>
+    <tr><th>Session</th><th>Recorded time (IST)</th></tr>
+    {% for r in records %}
+    <tr>
+      <td><strong>{{ r.title }}</strong></td>
+      <td>{{ r.marked_at | datetimeformat }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="2" class="empty-state">No attendance records yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+  const statusBox = document.getElementById("scan-status");
+  const retryBtn = document.getElementById("retry-cam-btn");
+  const flipBtn = document.getElementById("flip-cam-btn");
+  const fileInput = document.getElementById("qr-file-input");
+  const httpsWarning = document.getElementById("https-warning");
+
+  let submitting = false;
+  let currentFacingMode = "environment"; // default to back camera on mobile
+  let scanner = null;
+  let isScanning = false;
+
+  // Check if browser context is secure
+  const isSecureContext = window.isSecureContext ||
+    ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+  if (!isSecureContext) {
+    httpsWarning.style.display = "block";
+  }
+
+  async function handleScan(decodedText) {
+    if (submitting) return;
+    submitting = true;
+    statusBox.textContent = "Verifying attendance...";
+
+    try {
+      const response = await fetch(
+        "{{ url_for('mark_attendance') }}", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken":
+              document.querySelector('meta[name="csrf-token"]').content
+          },
+          body: JSON.stringify({ token: decodedText })
+        }
+      );
+
+      const result = await response.json();
+      statusBox.textContent = result.message || "Request completed.";
+
+      if (response.ok && result.ok) {
+        if (scanner && isScanning) {
+          try { await scanner.stop(); } catch (e) {}
+        }
+        setTimeout(() => window.location.reload(), 1200);
+      } else {
+        setTimeout(() => { submitting = false; }, 1800);
+      }
+    } catch (error) {
+      statusBox.textContent =
+        "Could not verify attendance. Check your connection and try again.";
+      submitting = false;
+    }
+  }
+
+  async function startCamera(mode) {
+    statusBox.textContent = "Requesting camera access...";
+    retryBtn.style.display = "none";
+
+    try {
+      if (!scanner) {
+        scanner = new Html5Qrcode("reader");
+      }
+
+      if (isScanning) {
+        try {
+          await scanner.stop();
+        } catch (e) {}
+        isScanning = false;
+      }
+
+      const scanConfig = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0
+      };
+
+      try {
+        // Preferred facingMode constraint (standard on mobile)
+        await scanner.start(
+          { facingMode: mode },
+          scanConfig,
+          handleScan,
+          () => {} // silent on frame-by-frame non-matches
+        );
+        isScanning = true;
+        currentFacingMode = mode;
+        statusBox.textContent = "Camera ready. Point at the QR code.";
+        flipBtn.style.display = "inline-block";
+      } catch (err) {
+        // Fallback: try default or alternative facing mode
+        const fallbackMode = (mode === "environment") ? "user" : "environment";
+        console.warn(`Camera mode ${mode} failed, trying ${fallbackMode}...`, err);
+
+        await scanner.start(
+          { facingMode: fallbackMode },
+          scanConfig,
+          handleScan,
+          () => {}
+        );
+        isScanning = true;
+        currentFacingMode = fallbackMode;
+        statusBox.textContent = "Camera ready. Point at the QR code.";
+        flipBtn.style.display = "inline-block";
+      }
+    } catch (finalErr) {
+      console.error("Camera error:", finalErr);
+      isScanning = false;
+      retryBtn.style.display = "inline-block";
+
+      if (!isSecureContext) {
+        statusBox.textContent = "Camera blocked: Mobile browsers require HTTPS. Use 'Upload / Snap Photo' above.";
+      } else if (finalErr.name === "NotAllowedError" || finalErr.name === "PermissionDeniedError") {
+        statusBox.textContent = "Camera permission was denied. Please allow camera access in your browser settings and tap Retry.";
+      } else if (finalErr.name === "NotFoundError" || finalErr.name === "DevicesNotFoundError") {
+        statusBox.textContent = "No camera hardware detected on this device.";
+      } else {
+        statusBox.textContent = "Unable to start camera. You can still scan using 'Upload / Snap Photo'.";
+      }
+    }
+  }
+
+  // Handle file-based QR scan fallback (works on any device & over HTTP)
+  fileInput.addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    statusBox.textContent = "Scanning selected image for QR code...";
+    try {
+      if (!scanner) {
+        scanner = new Html5Qrcode("reader");
+      }
+      const decodedText = await scanner.scanFile(file, true);
+      handleScan(decodedText);
+    } catch (err) {
+      statusBox.textContent = "Could not find a valid QR code in that image. Please try again.";
+      console.error("File scan failed:", err);
+    } finally {
+      fileInput.value = "";
+    }
+  });
+
+  // Flip camera button
+  flipBtn.addEventListener("click", () => {
+    const nextMode = (currentFacingMode === "environment") ? "user" : "environment";
+    startCamera(nextMode);
+  });
+
+  // Retry button
+  retryBtn.addEventListener("click", () => {
+    startCamera(currentFacingMode);
+  });
+
+  // Initialize camera automatically on page load
+  window.addEventListener("DOMContentLoaded", () => {
+    startCamera("environment");
+  });
+</script>
+{% endblock %}

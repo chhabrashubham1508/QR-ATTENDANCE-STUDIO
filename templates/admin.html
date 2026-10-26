@@ -1,0 +1,576 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | QR Attendance Studio{% endblock %}
+{% block content %}
+
+<!-- Header & Welcome Banner -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 14px;">
+  <div>
+    <h1 style="margin: 0; font-size: 1.75rem;">Interactive Dashboard</h1>
+    <p style="margin: 4px 0 0; font-size: 0.95rem;">
+      Real-time attendance analytics, lecture management, and classroom notices.
+    </p>
+  </div>
+  <div class="btn-group">
+    <button type="button" class="btn btn-secondary" onclick="openCreateSessionModal()">
+      ➕ New Lecture
+    </button>
+    <a href="{{ url_for('report') }}" class="btn btn-secondary">
+      📊 Full Report
+    </a>
+  </div>
+</div>
+
+<!-- KPI Metric Cards Grid -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Students</span>
+      <span class="stat-value">{{ students_count }}</span>
+      <span class="stat-subtext"><a href="{{ url_for('manage_students') }}">Manage students →</a></span>
+    </div>
+    <div class="stat-icon primary">🎓</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Faculty / Teachers</span>
+      <span class="stat-value">{{ teachers_count }}</span>
+      <span class="stat-subtext"><a href="{{ url_for('manage_teachers') }}">Manage faculty →</a></span>
+    </div>
+    <div class="stat-icon cyan">👨‍🏫</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Lectures</span>
+      <span class="stat-value">{{ sessions_count }}</span>
+      <span class="stat-subtext">
+        <span style="color: var(--success); font-weight: 700;">{{ active_sessions_count }}</span> currently active
+      </span>
+    </div>
+    <div class="stat-icon warning">📚</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-info">
+      <span class="stat-label">Total Attendance</span>
+      <span class="stat-value">{{ attendance_count }}</span>
+      <span class="stat-subtext">Scans verified</span>
+    </div>
+    <div class="stat-icon success">📋</div>
+  </div>
+</div>
+
+<!-- Interactive Analytics Charts Grid -->
+<div class="charts-grid">
+  <!-- Chart 1: Attendance Trends Over Time -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <h3>📈 Attendance Trend (Daily Scans)</h3>
+      <span class="badge badge-success">Live</span>
+    </div>
+    <div class="chart-container">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 2: Lecture-wise Breakdown -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <h3>📊 Turnout by Lecture</h3>
+      <span style="font-size: 0.8rem; color: var(--text-muted);">Recent sessions</span>
+    </div>
+    <div class="chart-container">
+      <canvas id="sessionBarChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 3: Active vs Closed Sessions Doughnut -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <h3>🍩 Lecture Status Breakdown</h3>
+      <span style="font-size: 0.8rem; color: var(--text-muted);">All time</span>
+    </div>
+    <div class="chart-container" style="max-height: 250px;">
+      <canvas id="statusPieChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- 2-Column Content: Classroom Chat/Notice Board + Quick Create Lecture -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 24px;">
+  <!-- Classroom Chat & Announcements Widget -->
+  <div class="chat-card">
+    <div class="chat-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 1.2rem;">📢</span>
+        <h3 style="margin: 0; font-size: 1.05rem;">Class Notice & Discussion Board</h3>
+      </div>
+      <span style="font-size: 0.8rem; color: var(--text-muted);">{{ messages|length }} posts</span>
+    </div>
+
+    <div class="chat-messages" id="chat-messages-container">
+      {% for msg in messages %}
+      <div class="chat-item">
+        <div class="chat-avatar {{ msg.role }}">{{ msg.author_name[:1]|upper }}</div>
+        <div class="chat-content">
+          <div class="chat-meta">
+            <span class="chat-author">{{ msg.author_name }}</span>
+            <span class="chat-role-badge {{ msg.role }}">{{ msg.role|capitalize }}</span>
+            <span class="chat-time">{{ msg.created_at|timeago }}</span>
+          </div>
+          <p class="chat-text">{{ msg.message }}</p>
+        </div>
+        <div class="chat-actions">
+          <form method="post" action="{{ url_for('delete_chat_message', message_id=msg.id) }}" style="display: inline; margin: 0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="chat-delete-btn" title="Delete message" onclick="return confirm('Delete this announcement?');">✕</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding: 24px;">
+        <p style="margin: 0;">No announcements or messages yet. Start a discussion below!</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <form method="post" action="{{ url_for('post_chat_message') }}" class="chat-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input name="message" class="chat-input" placeholder="Post an update, lecture notice, or instructions..." required maxlength="500">
+      <button type="submit" class="btn" style="min-height: 40px; padding: 0 16px;">Post</button>
+    </form>
+  </div>
+
+  <!-- Create Attendance Lecture Panel -->
+  <div class="panel" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <span style="font-size: 1.25rem;">⚡</span>
+        <h3 style="margin: 0;">Launch Attendance Session</h3>
+      </div>
+      <p style="margin: 0 0 14px; font-size: 0.9rem;">
+        Generate an anti-proxy dynamic QR code. The code rotates securely every 10 seconds.
+      </p>
+
+      <form method="post" action="{{ url_for('new_session') }}" style="gap: 12px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label style="margin-bottom: 6px;">Lecture / Subject Title</label>
+          <input name="title" placeholder="e.g. Computer Networks - Module 2 (Sec A)" required maxlength="150">
+        </div>
+        <div>
+          <label style="margin-bottom: 6px;">Lecture Duration</label>
+          <select name="duration" onchange="toggleCustomDuration(this)">
+            <option value="60" selected>1 hour</option>
+            <option value="120">2 hours</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="custom-duration-field" hidden>
+          <label style="margin-bottom: 6px;">Custom duration</label>
+          <div style="display: flex; gap: 10px;">
+            <div style="flex: 1;">
+              <label for="quick-custom-hours">Hours</label>
+              <input id="quick-custom-hours" name="custom_hours" type="number" min="0" max="12" step="1" placeholder="Hours">
+            </div>
+            <div style="flex: 1;">
+              <label for="quick-custom-minutes">Minutes</label>
+              <input id="quick-custom-minutes" name="custom_minutes" type="number" min="0" max="59" step="1" placeholder="Minutes">
+            </div>
+          </div>
+        </div>
+        <button type="submit" style="width: 100%;">
+          ⚡ Generate & Launch Live QR
+        </button>
+      </form>
+    </div>
+
+    <div style="margin-top: 18px; padding: 12px; background: var(--surface-muted); border-radius: var(--radius-sm); font-size: 0.85rem; color: #4338ca;">
+      💡 <strong>Anti-Proxy Protection:</strong> Tokens auto-rotate and expire. Screenshots will not work for absent students.
+    </div>
+  </div>
+</div>
+
+<!-- Lectures Table with Search & Interactive Actions -->
+<div class="panel">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+    <div>
+      <h3 style="margin: 0; font-size: 1.15rem;">Lectures & Attendance Sessions</h3>
+      <p style="margin: 2px 0 0; font-size: 0.86rem; color: var(--text-muted);">
+        Manage lecture titles, launch live QR projection, and edit or delete sessions.
+      </p>
+    </div>
+    <div style="width: min(280px, 100%);">
+      <input type="text" id="lecture-search" class="search-input" placeholder="Search lectures..." onkeyup="filterLectures()">
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="lectures-table">
+      <thead>
+        <tr>
+          <th>Lecture Title</th>
+          <th>Created</th>
+          <th>Attendance</th>
+          <th>Status</th>
+          <th style="text-align: right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent %}
+        <tr class="lecture-row" data-title="{{ s.title|lower }}">
+          <td>
+            <a href="{{ url_for('show_session', session_id=s.id) }}" style="font-weight: 700; color: var(--text);" title="View Live QR">
+              {{ s.title }}
+            </a>
+          </td>
+          <td style="font-size: 0.86rem; color: var(--text-muted);">
+            {{ s.created_at|datetimeformat }}
+          </td>
+          <td>
+            <span class="badge" style="background: #f1f5f9; color: var(--brand); font-weight: 800; font-size: 0.88rem;">
+              👥 {{ s.total }}
+            </span>
+          </td>
+          <td>
+            {% if s.active %}
+              <span class="badge badge-success">● Active (Live)</span>
+            {% else %}
+              <span class="badge badge-danger">Closed</span>
+            {% endif %}
+          </td>
+          <td style="text-align: right;">
+            <div class="btn-group" style="justify-content: flex-end;">
+              <!-- Open Live QR -->
+              <a href="{{ url_for('show_session', session_id=s.id) }}" class="btn btn-secondary btn-sm" title="View Dynamic QR screen">
+                Disha Attendance System
+              </a>
+
+              <!-- Edit Lecture Modal Trigger -->
+              <button type="button" class="btn btn-secondary btn-sm" 
+                      onclick="openEditLectureModal('{{ s.id }}', '{{ s.title|replace('\'', '\\\'') }}', {{ 1 if s.active else 0 }})"
+                      title="Edit lecture details">
+                ✏️ Edit
+              </button>
+
+              <!-- Close button if active -->
+              {% if s.active %}
+              <form method="post" action="{{ url_for('close_session', session_id=s.id) }}" style="display:inline; margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-warning btn-sm" title="Close attendance session">
+                  ⏹ Close
+                </button>
+              </form>
+              {% endif %}
+
+              <!-- Delete Lecture -->
+              <form method="post" action="{{ url_for('delete_session', session_id=s.id) }}" style="display:inline; margin:0;"
+                    onsubmit="return confirm('Delete lecture \'{{ s.title|replace('\'', '\\\'') }}\'? Its attendance records will remain in reports for 7 days.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger btn-sm" title="Delete lecture; retain attendance reports for 7 days">
+                  🗑️
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="empty-state" style="padding: 24px;">No lecture sessions created yet. Click "➕ New Lecture" above to start!</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Quick Create Lecture -->
+<div id="create-modal" class="modal-overlay">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title">Create New Lecture Session</h3>
+      <button type="button" class="modal-close" onclick="closeCreateSessionModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form method="post" action="{{ url_for('new_session') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label>Lecture Title / Subject</label>
+          <input name="title" placeholder="e.g. Operating Systems - Lecture 6" required maxlength="150" autofocus>
+        </div>
+        <div>
+          <label>Lecture Duration</label>
+          <select name="duration" onchange="toggleCustomDuration(this)">
+            <option value="60" selected>1 hour</option>
+            <option value="120">2 hours</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="custom-duration-field" hidden>
+          <label>Custom duration</label>
+          <div style="display: flex; gap: 10px;">
+            <div style="flex: 1;">
+              <label for="modal-custom-hours">Hours</label>
+              <input id="modal-custom-hours" name="custom_hours" type="number" min="0" max="12" step="1" placeholder="Hours">
+            </div>
+            <div style="flex: 1;">
+              <label for="modal-custom-minutes">Minutes</label>
+              <input id="modal-custom-minutes" name="custom_minutes" type="number" min="0" max="59" step="1" placeholder="Minutes">
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px;">
+          <button type="button" class="btn btn-secondary" onclick="closeCreateSessionModal()">Cancel</button>
+          <button type="submit" class="btn">Launch Session</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit Lecture -->
+<div id="edit-lecture-modal" class="modal-overlay">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Lecture</h3>
+      <button type="button" class="modal-close" onclick="closeEditLectureModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="edit-lecture-form" method="post" action="">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label>Lecture Title</label>
+          <input id="edit-lecture-title" name="title" required maxlength="150">
+        </div>
+        <div style="margin-top: 10px;">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="edit-lecture-active" name="active" value="1" style="width: auto; min-height: auto;">
+            <span>Active for Student Attendance</span>
+          </label>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+          <button type="button" class="btn btn-secondary" onclick="closeEditLectureModal()">Cancel</button>
+          <button type="submit" class="btn">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Safe JSON Data Script for Chart.js -->
+<script id="dashboard-chart-data" type="application/json">
+{
+  "trendLabels": {{ chart_trend_labels|tojson }},
+  "trendData": {{ chart_trend_data|tojson }},
+  "sessionLabels": {{ chart_session_labels|tojson }},
+  "sessionData": {{ chart_session_data|tojson }},
+  "activeCount": {{ active_count }},
+  "closedCount": {{ closed_count }}
+}
+</script>
+
+<script>
+  function toggleCustomDuration(select) {
+    const field = select.form.querySelector(".custom-duration-field");
+    const isCustom = select.value === "custom";
+    field.hidden = !isCustom;
+    field.querySelectorAll("input").forEach(input => {
+      input.required = isCustom;
+    });
+  }
+
+  document.querySelectorAll('select[name="duration"]').forEach(toggleCustomDuration);
+
+  // Search & Filter Lectures Table
+  function filterLectures() {
+    const query = document.getElementById("lecture-search").value.toLowerCase().trim();
+    const rows = document.querySelectorAll("#lectures-table tbody tr.lecture-row");
+    rows.forEach(row => {
+      const title = row.getAttribute("data-title") || "";
+      row.style.display = title.includes(query) ? "" : "none";
+    });
+  }
+
+  // Modals Handling
+  function openCreateSessionModal() {
+    document.getElementById("create-modal").classList.add("active");
+  }
+  function closeCreateSessionModal() {
+    document.getElementById("create-modal").classList.remove("active");
+  }
+
+  function openEditLectureModal(id, title, active) {
+    const form = document.getElementById("edit-lecture-form");
+    form.action = "/admin/session/" + id + "/edit";
+    document.getElementById("edit-lecture-title").value = title;
+    document.getElementById("edit-lecture-active").checked = (active === 1);
+    document.getElementById("edit-lecture-modal").classList.add("active");
+  }
+  function closeEditLectureModal() {
+    document.getElementById("edit-lecture-modal").classList.remove("active");
+  }
+
+  // Close modals on escape key or clicking backdrop
+  window.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") {
+      closeCreateSessionModal();
+      closeEditLectureModal();
+    }
+  });
+  document.querySelectorAll(".modal-overlay").forEach(overlay => {
+    overlay.addEventListener("click", function(e) {
+      if (e.target === overlay) {
+        overlay.classList.remove("active");
+      }
+    });
+  });
+
+  // Auto-scroll chat container to bottom
+  const chatContainer = document.getElementById("chat-messages-container");
+  if (chatContainer) {
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+  }
+
+  // Render Charts safely with Chart.js
+  document.addEventListener("DOMContentLoaded", function() {
+    const dataElement = document.getElementById("dashboard-chart-data");
+    if (!dataElement) return;
+
+    let chartData = {
+      trendLabels: [],
+      trendData: [],
+      sessionLabels: [],
+      sessionData: [],
+      activeCount: 0,
+      closedCount: 0
+    };
+
+    try {
+      chartData = JSON.parse(dataElement.textContent);
+    } catch (e) {
+      console.warn("Chart data parse error:", e);
+    }
+
+    // Chart 1: Daily Attendance Trend Line Chart
+    const trendCtx = document.getElementById("trendChart");
+    if (trendCtx) {
+      new Chart(trendCtx, {
+        type: "line",
+        data: {
+          labels: chartData.trendLabels,
+          datasets: [{
+            label: "Marked Attendance",
+            data: chartData.trendData,
+            borderColor: "#4f46e5",
+            backgroundColor: "rgba(79, 70, 229, 0.12)",
+            tension: 0.35,
+            fill: true,
+            pointBackgroundColor: "#4338ca",
+            pointBorderColor: "#ffffff",
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            borderWidth: 2.5
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              titleColor: "#ffffff",
+              bodyColor: "#ffffff",
+              padding: 10,
+              cornerRadius: 8
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0 }
+            }
+          }
+        }
+      });
+    }
+
+    // Chart 2: Lecture-wise Turnout Bar Chart
+    const barCtx = document.getElementById("sessionBarChart");
+    if (barCtx) {
+      new Chart(barCtx, {
+        type: "bar",
+        data: {
+          labels: chartData.sessionLabels,
+          datasets: [{
+            label: "Students Attended",
+            data: chartData.sessionData,
+            backgroundColor: "#06b6d4",
+            borderRadius: 6,
+            hoverBackgroundColor: "#0891b2"
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "#0f172a",
+              padding: 10,
+              cornerRadius: 8
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { maxRotation: 25, minRotation: 0 }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0 }
+            }
+          }
+        }
+      });
+    }
+
+    // Chart 3: Lecture Status Doughnut Chart
+    const pieCtx = document.getElementById("statusPieChart");
+    if (pieCtx) {
+      new Chart(pieCtx, {
+        type: "doughnut",
+        data: {
+          labels: ["Active", "Completed/Closed"],
+          datasets: [{
+            data: [chartData.activeCount, chartData.closedCount],
+            backgroundColor: ["#15803d", "#94a3b8"],
+            borderWidth: 2,
+            borderColor: "#ffffff",
+            hoverOffset: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: "bottom",
+              labels: {
+                boxWidth: 12,
+                padding: 14,
+                font: { family: "Inter", weight: "600" }
+              }
+            }
+          },
+          cutout: "65%"
+        }
+      });
+    }
+  });
+</script>
+{% endblock %}

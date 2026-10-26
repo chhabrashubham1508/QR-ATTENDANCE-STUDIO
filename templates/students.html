@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Manage Students | QR Attendance Studio{% endblock %}
+{% block content %}
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <h1 style="margin: 0; font-size: 1.65rem;">Student Directory</h1>
+    <p style="margin: 4px 0 0; font-size: 0.95rem; color: var(--text-muted);">
+      Manage registered students, update account credentials, and review participation.
+    </p>
+  </div>
+  <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">← Back to Dashboard</a>
+</div>
+
+<!-- 2-Column: Add Student Card + Registered Students Directory -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; align-items: start;">
+  
+  <!-- Add Student Form Card -->
+  <div class="panel">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+      <span style="font-size: 1.25rem;">➕</span>
+      <h3 style="margin: 0; font-size: 1.15rem;">Add New Student</h3>
+    </div>
+    <p style="font-size: 0.88rem; margin: 0 0 16px; color: var(--text-muted);">
+      Students scan the live dynamic QR codes from their student portal using this account.
+    </p>
+
+    <form method="post" action="{{ url_for('manage_students') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label>Full Name</label>
+        <input name="name" placeholder="e.g. Maya Sharma" required maxlength="120">
+      </div>
+      <div>
+        <label>Roll / Matriculation Number</label>
+        <input name="roll_no" placeholder="e.g. CS2026-042" required maxlength="40">
+      </div>
+      <div>
+        <label>Login Username</label>
+        <input name="username" placeholder="e.g. mayasharma" required maxlength="80">
+      </div>
+      <div>
+        <label>Initial Password (Min 8 characters)</label>
+        <input name="password" type="password" placeholder="••••••••" required minlength="8">
+      </div>
+      <button type="submit" style="margin-top: 8px;">Create Student Account</button>
+    </form>
+  </div>
+
+  <!-- Registered Students Table -->
+  <div class="panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+      <h3 style="margin: 0; font-size: 1.15rem;">Registered Students ({{ students|length }})</h3>
+      <div style="width: min(240px, 100%);">
+        <input type="text" id="student-search" class="search-input" placeholder="Search students..." onkeyup="filterStudents()">
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="students-table">
+        <thead>
+          <tr>
+            <th>Roll No</th>
+            <th>Name</th>
+            <th>Username</th>
+            <th>Attendance</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in students %}
+          <tr class="student-row" data-query="{{ (s.roll_no ~ ' ' ~ s.name ~ ' ' ~ s.username)|lower }}">
+            <td><strong>{{ s.roll_no }}</strong></td>
+            <td>{{ s.name }}</td>
+            <td style="color: var(--text-muted); font-size: 0.88rem;">{{ s.username }}</td>
+            <td>
+              <span class="badge" style="background: #f0fdf4; color: #166534; font-weight: 700;">
+                {{ s.attendance_count }} marked
+              </span>
+            </td>
+            <td style="text-align: right;">
+              <div class="btn-group" style="justify-content: flex-end;">
+                <!-- Edit Student Button -->
+                <a href="{{ url_for('edit_student', student_id=s.id) }}" class="btn btn-secondary btn-sm" title="Edit student">
+                  ✏️ Edit
+                </a>
+
+                <!-- Delete Student Button -->
+                <form method="post" action="{{ url_for('delete_student', student_id=s.id) }}" style="display:inline; margin:0;"
+                      onsubmit="return confirm('Are you sure you want to delete student \'{{ s.name|replace('\'', '\\\'') }}\' ({{ s.roll_no }})? All their attendance records will also be deleted.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-danger btn-sm" title="Delete student">
+                    🗑️
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="empty-state" style="padding: 24px;">No students registered yet. Fill out the form to add your first student.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  function filterStudents() {
+    const query = document.getElementById("student-search").value.toLowerCase().trim();
+    const rows = document.querySelectorAll("#students-table tbody tr.student-row");
+    rows.forEach(row => {
+      const text = row.getAttribute("data-query") || "";
+      row.style.display = text.includes(query) ? "" : "none";
+    });
+  }
+</script>
+{% endblock %}

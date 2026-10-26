@@ -1,0 +1,57 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}QR Attendance{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}?v={{ namespace_now }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <a href="/" style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 8px;">
+        <img
+          src="{{ url_for('static', filename='disha.jpg') }}"
+          alt="College Logo"
+          width="50"
+        >
+        <span>Disha Institute QR Attendance Studio</span>
+      </a>
+    </div>
+    {% if current_user.is_authenticated %}
+      <nav class="nav-links">
+        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); padding: 4px 10px; background: #f1f5f9; border-radius: 999px;">
+          👤 {{ current_user.display_name or current_user.username }}
+          <span style="text-transform: capitalize; color: var(--brand); font-weight: 700;">({{ current_user.role }})</span>
+        </span>
+        {% if current_user.role in ['admin', 'teacher'] %}
+          <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('manage_teachers') }}">Teachers</a>
+          <a href="{{ url_for('manage_students') }}">Students</a>
+          <a href="{{ url_for('report') }}">Reports</a>
+        {% else %}
+          <a href="{{ url_for('student_dashboard') }}">My Dashboard</a>
+        {% endif %}
+        <form method="post" action="{{ url_for('logout') }}" style="display:inline-block; margin:0;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger" style="min-height:36px; padding:6px 14px;">Log out</button>
+        </form>
+      </nav>
+    {% endif %}
+  </header>
+
+  <main class="container">
+    {% for message in get_flashed_messages() %}
+      <div class="flash">{{ message }}</div>
+    {% endfor %}
+
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

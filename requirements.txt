@@ -1,0 +1,7 @@
+openpyxl>=3.1,<4
+Flask
+Flask-Login
+Flask-WTF
+qrcode[pil]
+werkzeug.security
+crytograpy

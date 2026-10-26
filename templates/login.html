@@ -1,0 +1,23 @@
+
+{% extends "base.html" %}
+{% block title %}Login | QR Attendance{% endblock %}
+{% block content %}
+<div style="max-width: 440px; margin: 40px auto 20px;">
+  <div class="panel form-card">
+    <h2 style="margin-top: 0;">Sign In</h2>
+    <p style="margin-top: -6px; margin-bottom: 20px;">Enter your credentials to access the system.</p>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label for="username">Username</label>
+        <input id="username" name="username" placeholder="e.g. admin or student1" required autocomplete="username">
+      </div>
+      <div>
+        <label for="password">Password</label>
+        <input id="password" type="password" name="password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <button type="submit" style="width: 100%; margin-top: 6px;">Sign in</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

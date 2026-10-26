@@ -1,0 +1,33 @@
+
+{% extends "base.html" %}
+{% block title %}Attendance Report{% endblock %}
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+  <h2 style="margin: 0;">Attendance Report</h2>
+  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+    <a href="{{ url_for('report_excel') }}" class="btn btn-secondary" style="min-height: 36px; padding: 6px 14px;">📥 Export Excel</a>
+    <a href="{{ url_for('report_csv') }}" class="btn btn-secondary" style="min-height: 36px; padding: 6px 14px;">📥 Export CSV</a>
+  </div>
+</div>
+
+<div class="panel">
+  <table>
+    <tr>
+      <th>Session</th>
+      <th>Roll number</th>
+      <th>Student</th>
+      <th>Recorded time (IST)</th>
+    </tr>
+    {% for r in records %}
+    <tr>
+      <td>{{ r.title }}</td>
+      <td>{{ r.roll_no }}</td>
+      <td>{{ r.name }}</td>
+      <td>{{ r.marked_at | datetimeformat }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4">No attendance records found.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Edit Lecture | {{ session.title }}{% endblock %}
+{% block content %}
+
+<div style="max-width: 540px; margin: 30px auto;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div>
+      <h2 style="margin: 0; font-size: 1.45rem;">✏️ Edit Lecture Session</h2>
+      <p style="margin: 4px 0 0; font-size: 0.9rem; color: var(--text-muted);">
+        Update lecture title or reopen/close attendance recording.
+      </p>
+    </div>
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+
+  <div class="panel">
+    <form method="post" action="{{ url_for('edit_session', session_id=session.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label>Lecture Title</label>
+        <input name="title" value="{{ session.title }}" required maxlength="150">
+      </div>
+
+      <div style="margin-top: 10px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <input type="checkbox" name="active" value="1" {{ 'checked' if session.active else '' }} style="width: auto; min-height: auto;">
+          <span>Active for Student Attendance (Live)</span>
+        </label>
+        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-top: 4px;">
+          Uncheck to close attendance recording for this session.
+        </span>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 18px;">
+        <button type="submit" style="flex: 1;">Save Changes</button>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary" style="flex: 1;">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
